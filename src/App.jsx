@@ -402,7 +402,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   const [showPlayers, setShowPlayers] = useState(false);
   const [pickingGroupId, setPickingGroupId] = useState(null);
   const [pickingPlayerId, setPickingPlayerId] = useState(null);
-
+  const [loadedCourse, setLoadedCourse] = useState(null);
   const [hdcPct, setHdcPct] = useState(100);
   const [showCustomHdc, setShowCustomHdc] = useState(false);
   const [customHdcVal, setCustomHdcVal] = useState("");
@@ -1041,6 +1041,7 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
           <button className={`tab ${activeTab==="medal-gross"?"active":""}`} onClick={()=>setActiveTab("medal-gross")}>Medal Gross</button>
           <button className={`tab ${activeTab==="match"?"active":""}`} onClick={()=>setActiveTab("match")}>Parejas</button>
           <button className={`tab ${activeTab==="vegas"?"active":""}`} onClick={()=>setActiveTab("vegas")}>Vegas</button>
+          <button className={`tab ${activeTab==="sindicato"?"active":""}`} onClick={()=>setActiveTab("sindicato")}>Sindicato</button>
         </div>
         <div style={{display:"flex",gap:6}}>
           <button className="btn-ghost small" onClick={()=>setShowHistory(true)}>🕓</button>
@@ -1059,6 +1060,10 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
 
       {activeTab==="vegas"&&(
         <VegasView session={session} onUpdate={onUpdate} />
+      )}
+
+      {activeTab==="sindicato"&&(
+        <SindicatoView session={session} />
       )}
 
       {activeTab==="scorecard"&&(
@@ -1373,6 +1378,142 @@ function VegasView({ session, onUpdate }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─── Sindicato View ───────────────────────────────────────────────────────────
+function SindicatoView({ session }) {
+  const { players, holes } = session;
+  const hdcPct = session.hdcPct ?? 100;
+  const groups = session.groups || [{ id: "g1", name: "Grupo 1" }];
+
+  const POINTS = { 4: [6,4,2,0], 3: [4,2,0], 2: [2,0], 1: [2] };
+
+  const getNetScore = (pid, hole) => {
+    const s = (session.scores?.[pid] || {})[hole.number];
+    if (!s) return null;
+    const ehcp = effectiveHcp(players.find(p => p.id === pid)?.handicap || 0, hdcPct);
+    return s - Math.floor(ehcp / 18) - (hole.si <= (ehcp % 18) ? 1 : 0);
+  };
+
+  const calcHolePoints = (groupPlayers, hole) => {
+    const nets = groupPlayers.map(p => ({ id: p.id, net: getNetScore(p.id, hole) }));
+    if (nets.some(n => n.net === null)) return null;
+
+    const pts = POINTS[groupPlayers.length] || POINTS[4];
+    const sorted = [...nets].sort((a, b) => a.net - b.net);
+
+    // Assign points with tie handling
+    const result = {};
+    let i = 0;
+    while (i < sorted.length) {
+      const tiedWith = sorted.filter(x => x.net === sorted[i].net);
+      const tieIndices = tiedWith.map((_, k) => i + k);
+      const tiePoints = tieIndices.reduce((sum, idx) => sum + (pts[idx] ?? 0), 0);
+      const avgPoints = tiePoints / tiedWith.length;
+      tiedWith.forEach(x => { result[x.id] = avgPoints; });
+      i += tiedWith.length;
+    }
+    return result;
+  };
+
+  const calcGroupStats = (groupPlayers) => {
+    const totals = {};
+    const vuelta1 = {};
+    const vuelta2 = {};
+    groupPlayers.forEach(p => { totals[p.id] = 0; vuelta1[p.id] = 0; vuelta2[p.id] = 0; });
+
+    holes.forEach((hole, idx) => {
+      const hpts = calcHolePoints(groupPlayers, hole);
+      if (!hpts) return;
+      groupPlayers.forEach(p => {
+        const pts = hpts[p.id] ?? 0;
+        totals[p.id] += pts;
+        if (idx < 9) vuelta1[p.id] += pts;
+        else vuelta2[p.id] += pts;
+      });
+    });
+    return { totals, vuelta1, vuelta2 };
+  };
+
+  const [activeGroup, setActiveGroup] = useState(groups[0]?.id);
+  const groupPlayers = players.filter(p => p.groupId === activeGroup);
+  const stats = calcGroupStats(groupPlayers);
+  const front9 = holes.slice(0, 9);
+  const back9 = holes.slice(9, 18);
+
+  const renderHoleRow = (hole) => {
+    const hpts = calcHolePoints(groupPlayers, hole);
+    const nets = groupPlayers.map(p => ({ id: p.id, net: getNetScore(p.id, hole) }));
+    return (
+      <tr key={hole.number}>
+        <td className="sind-hole-num">H{hole.number}<span className="sind-par">P{hole.par}</span></td>
+        {groupPlayers.map(p => {
+          const net = nets.find(n => n.id === p.id)?.net;
+          const pts = hpts?.[p.id];
+          return (
+            <td key={p.id} className={`sind-cell ${pts >= 6?"sind-top":pts >= 4?"sind-second":pts >= 2?"sind-third":pts === 0?"sind-last":""}`}>
+              {net !== null && net !== undefined ? (
+                <>
+                  <div className="sind-net">{net}</div>
+                  {pts !== undefined && <div className="sind-pts">{Number.isInteger(pts) ? pts : pts.toFixed(1)}</div>}
+                </>
+              ) : "—"}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
+
+  const renderTotalRow = (label, data, highlight) => (
+    <tr className={highlight ? "sind-total-row highlight" : "sind-total-row"}>
+      <td className="sind-hole-num">{label}</td>
+      {groupPlayers.map(p => (
+        <td key={p.id} className="sind-total-cell">
+          {Number.isInteger(data[p.id]) ? data[p.id] : data[p.id]?.toFixed(1) ?? 0}
+        </td>
+      ))}
+    </tr>
+  );
+
+  return (
+    <div className="sind-view">
+      <div className="sind-group-tabs">
+        {groups.map(g => (
+          <button key={g.id} className={"hv-group-tab" + (activeGroup === g.id ? " active" : "")} onClick={() => setActiveGroup(g.id)}>
+            {g.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="sind-info">
+        Puntos por hoyo · {groupPlayers.length} jugadores: {(POINTS[groupPlayers.length]||POINTS[4]).join(", ")} pts
+      </div>
+
+      <div className="sind-table-wrap">
+        <table className="sind-table">
+          <thead>
+            <tr>
+              <th className="sind-hole-num">Hoyo</th>
+              {groupPlayers.map(p => <th key={p.id} className="sind-player-header">{p.name.split(" ")[0]}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="sind-section-label"><td colSpan={groupPlayers.length+1}>Primera vuelta (Hoyos 1–9)</td></tr>
+            {front9.map(hole => renderHoleRow(hole))}
+            {renderTotalRow("V1", stats.vuelta1, false)}
+            {back9.length > 0 && <>
+              <tr className="sind-section-label"><td colSpan={groupPlayers.length+1}>Segunda vuelta (Hoyos 10–18)</td></tr>
+              {back9.map(hole => renderHoleRow(hole))}
+              {renderTotalRow("V2", stats.vuelta2, false)}
+            </>}
+            {renderTotalRow("Total", stats.totals, true)}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1789,6 +1930,28 @@ export default function GolfApp() {
         .vegas-gt-label{font-size:0.78rem;opacity:0.75;margin-bottom:4px}
         .vegas-gt-amount{font-size:2rem;font-weight:700}
         .vegas-gt-sub{font-size:0.78rem;opacity:0.8;margin-top:4px}
+
+        /* Sindicato */
+        .sind-view{padding-bottom:40px}
+        .sind-info{padding:10px 16px;font-size:0.8rem;color:var(--muted);background:var(--green-pale);border-bottom:1px solid #c5dfc9}
+        .sind-table-wrap{overflow-x:auto;padding:12px 10px}
+        .sind-table{border-collapse:collapse;width:100%;font-size:0.8rem}
+        .sind-table th,.sind-table td{border:1px solid #c5dfc9;padding:5px 6px;text-align:center}
+        .sind-table thead th{background:var(--green-dark);color:white;font-size:0.75rem}
+        .sind-player-header{min-width:60px}
+        .sind-hole-num{background:var(--green-pale);font-weight:700;font-size:0.72rem;color:var(--green-dark);white-space:nowrap}
+        .sind-par{display:block;font-weight:400;font-size:0.65rem;color:var(--muted)}
+        .sind-cell{background:white;padding:4px 3px !important;min-width:52px}
+        .sind-cell.sind-top{background:#f3d6ef}
+        .sind-cell.sind-second{background:#dce9ff}
+        .sind-cell.sind-third{background:var(--green-pale)}
+        .sind-cell.sind-last{background:#f5f5f5}
+        .sind-net{font-weight:700;font-size:0.82rem;color:var(--green-dark)}
+        .sind-pts{font-size:0.68rem;color:var(--muted);margin-top:1px}
+        .sind-section-label td{background:var(--green-dark);color:white;font-size:0.72rem;font-weight:600;padding:5px 8px;text-align:left}
+        .sind-total-row td{background:#f0f7f2;font-weight:700;font-size:0.82rem}
+        .sind-total-row.highlight td{background:var(--green-dark);color:white;font-size:0.9rem}
+        .sind-total-cell{min-width:52px}
         /* ── Responsive Mobile ───────────────────────────────────────────── */
         @media (max-width: 600px) {
           .setup-screen{padding:16px 12px 60px;font-size:16px}
