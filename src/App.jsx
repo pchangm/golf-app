@@ -397,7 +397,6 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   const [players, setPlayers] = useState([
     { id:1,name:"",handicap:18,groupId:"g1"},{id:2,name:"",handicap:18,groupId:"g1"},{id:3,name:"",handicap:18,groupId:"g1"},{id:4,name:"",handicap:18,groupId:"g1"},
   ]);
-  const [holes, setHoles] = useState(DEFAULT_HOLES);
   const [showCourses, setShowCourses] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showPlayers, setShowPlayers] = useState(false);
