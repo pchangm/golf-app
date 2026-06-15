@@ -1295,7 +1295,7 @@ export default function GolfApp() {
         .history-count{background:var(--green-dark);color:white;border-radius:10px;padding:1px 8px;font-size:0.75rem;font-weight:700}
 
         /* Setup */
-        .setup-screen{max-width:760px;margin:0 auto;padding:32px 20px 60px;background:var(--fairway);min-height:100vh}
+        .setup-screen{max-width:760px;margin:0 auto;padding:32px 20px 60px;background:var(--fairway);min-height:100vh;width:100%}
         .setup-header{text-align:center;margin-bottom:36px}
         .logo-mark{font-size:3rem;margin-bottom:8px}
         .setup-header h1{font-size:2rem;color:var(--green-dark);letter-spacing:-0.5px}
@@ -1507,9 +1507,13 @@ export default function GolfApp() {
 
         /* ── Responsive Mobile ───────────────────────────────────────────── */
         @media (max-width: 600px) {
-          .setup-screen{padding:16px 12px 60px}
-          .setup-header h1{font-size:1.4rem}
-          .logo-mark{font-size:2rem}
+          .setup-screen{padding:16px 12px 60px;font-size:16px}
+          .setup-header h1{font-size:1.6rem}
+          .logo-mark{font-size:2.5rem}
+          .text-input{font-size:1rem;padding:12px 14px}
+          .field-label{font-size:0.85rem}
+          .btn-primary{font-size:1rem;padding:16px}
+          .btn-ghost{font-size:0.9rem;padding:8px 14px}
           .top-bar{padding:8px 10px;gap:6px}
           .round-name{font-size:0.78rem}
           .tab-bar{overflow-x:auto;flex-wrap:nowrap;gap:3px}
