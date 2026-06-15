@@ -1504,6 +1504,57 @@ export default function GolfApp() {
         .hv-next-btn.ready{background:var(--green-dark);color:white}
         .hv-next-btn:hover{opacity:0.9}
         .hv-finish-hint{text-align:center;padding:16px;font-size:0.85rem;color:var(--muted)}
+
+        /* ── Responsive Mobile ───────────────────────────────────────────── */
+        @media (max-width: 600px) {
+          .setup-screen{padding:16px 12px 60px}
+          .setup-header h1{font-size:1.4rem}
+          .logo-mark{font-size:2rem}
+          .top-bar{padding:8px 10px;gap:6px}
+          .round-name{font-size:0.78rem}
+          .tab-bar{overflow-x:auto;flex-wrap:nowrap;gap:3px}
+          .tab{padding:4px 8px;font-size:0.7rem;white-space:nowrap}
+          .btn-ghost.small{padding:4px 7px;font-size:0.72rem}
+          .player-tabs{scroll-snap-type:x mandatory}
+          .player-tab{min-width:70px;padding:6px 10px;scroll-snap-align:start}
+          .ptab-name{font-size:0.72rem;max-width:70px}
+          .ptab-pts{font-size:0.65rem}
+          .player-info-bar{padding:8px 10px;gap:8px}
+          .pname{font-size:0.9rem}
+          .ptotal{font-size:0.75rem;margin-left:0;width:100%}
+          .tables-wrap{padding:8px 6px}
+          .score-table{font-size:0.7rem;min-width:300px}
+          .score-table th,.score-table td{padding:3px 2px}
+          .score-input{font-size:0.78rem}
+          .grand-total{margin:0 6px 20px;padding:10px}
+          .gt-item strong{font-size:1.1rem}
+          .gt-item.highlight strong{font-size:1.3rem}
+          .leaderboard{padding:12px 10px}
+          .lb-row{padding:10px 12px;gap:10px}
+          .lb-name{font-size:0.9rem}
+          .lb-pts{font-size:1.3rem}
+          .lb-net{font-size:1.2rem}
+          .hv-hole-nav{padding:12px 10px 6px}
+          .hv-hole-num{font-size:1.3rem}
+          .hv-players{padding:10px}
+          .hv-player-card{padding:10px 12px;gap:8px}
+          .hv-player-name{font-size:0.9rem}
+          .hv-score-input{width:44px;height:40px;font-size:1.2rem}
+          .hv-stepper{width:32px;height:32px;font-size:1.1rem}
+          .hv-next-btn{margin:4px 10px 0;width:calc(100% - 20px)}
+          .modal-box{margin:10px}
+          .modal-body{padding:12px 14px 16px}
+          .course-card{padding:10px 12px}
+          .group-block{padding:10px}
+          .match-view{padding:10px;gap:10px}
+          .match-pairs-row{padding:10px}
+          .match-score-num{font-size:1.6rem}
+          .history-btn{padding:10px 12px;font-size:0.85rem}
+          .hdc-pct-btn{padding:7px 12px;font-size:0.82rem}
+          .number-input{width:52px;padding:8px 6px}
+          .player-row{gap:6px}
+          .section-header{gap:4px}
+        }
       `}</style>
 
       {!session
