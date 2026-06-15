@@ -402,7 +402,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   const [showPlayers, setShowPlayers] = useState(false);
   const [pickingGroupId, setPickingGroupId] = useState(null);
   const [pickingPlayerId, setPickingPlayerId] = useState(null);
-
+  const [loadedCourse, setLoadedCourse] = useState(null);
   const [hdcPct, setHdcPct] = useState(100);
   const [showCustomHdc, setShowCustomHdc] = useState(false);
   const [customHdcVal, setCustomHdcVal] = useState("");
@@ -414,8 +414,9 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   const canStart = players.every(p=>p.name.trim());
   const addGroup = () => {
     const id = "g" + Date.now();
+    const t = Date.now();
     setGroups(g => [...g, { id, name: "Grupo " + (g.length + 1) }]);
-    setPlayers(ps => [...ps, { id: Date.now(), name: "", handicap: 18, groupId: id }, { id: Date.now()+1, name: "", handicap: 18, groupId: id }]);
+    setPlayers(ps => [...ps, { id: t, name: "", handicap: 18, groupId: id }, { id: t+1, name: "", handicap: 18, groupId: id }, { id: t+2, name: "", handicap: 18, groupId: id }, { id: t+3, name: "", handicap: 18, groupId: id }]);
   };
   const removeGroup = (gid) => {
     if (groups.length <= 1) return;
@@ -423,7 +424,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
     setPlayers(ps => ps.filter(p => p.groupId !== gid));
   };
   const updateGroupName = (gid, name) => setGroups(g => g.map(x => x.id === gid ? {...x, name} : x));
-  const addPlayerToGroup = (gid) => { if(players.length>=12)return; setPlayers(ps=>[...ps,{id:Date.now(),name:"",handicap:18,groupId:gid}]); };
+  const addPlayerToGroup = (gid) => { setPlayers(ps=>[...ps,{id:Date.now(),name:"",handicap:18,groupId:gid}]); };
   const removePlayer = id => { const grp = players.find(p=>p.id===id)?.groupId; const inGrp = players.filter(p=>p.groupId===grp).length; if(inGrp<=1)return; setPlayers(players.filter(p=>p.id!==id)); };
 
   return (
@@ -497,10 +498,10 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
 
       <div className="setup-section">
         <div className="section-header">
-          <label className="field-label">Grupos y jugadores ({players.length}/12)</label>
+          <label className="field-label">Grupos y jugadores ({players.length})</label>
           <div style={{display:"flex",gap:6}}>
             <button className="btn-ghost" onClick={()=>{setShowPlayers(true);setPickingGroupId(null);}}>Jugadores</button>
-            <button className="btn-ghost" onClick={addGroup} disabled={players.length>=10}>+ Grupo</button>
+            <button className="btn-ghost" onClick={addGroup} >+ Grupo</button>
           </div>
         </div>
         {groups.map((g, gi) => {
@@ -509,7 +510,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
             <div key={g.id} className="group-block">
               <div className="group-header">
                 <input className="text-input group-name-input" value={g.name} onChange={e=>updateGroupName(g.id,e.target.value)} placeholder="Nombre del grupo"/>
-                <button className="btn-ghost small" onClick={()=>addPlayerToGroup(g.id)} disabled={players.length>=12}>+ Vacío</button>
+                <button className="btn-ghost small" onClick={()=>addPlayerToGroup(g.id)} >+ Vacío</button>
                 <button className="btn-ghost small" onClick={()=>{setPickingGroupId(g.id);setShowPlayers(true);}}>+ Libreta</button>
                 {groups.length > 1 && <button className="btn-remove" onClick={()=>removeGroup(g.id)} title="Eliminar grupo">✕</button>}
               </div>
