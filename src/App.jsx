@@ -402,7 +402,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   const [showPlayers, setShowPlayers] = useState(false);
   const [pickingGroupId, setPickingGroupId] = useState(null);
   const [pickingPlayerId, setPickingPlayerId] = useState(null);
-
+  const [loadedCourse, setLoadedCourse] = useState(null);
   const [hdcPct, setHdcPct] = useState(100);
   const [showCustomHdc, setShowCustomHdc] = useState(false);
   const [customHdcVal, setCustomHdcVal] = useState("");
@@ -560,12 +560,48 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   );
 }
 
+
+// ─── Who Are You Screen ───────────────────────────────────────────────────────
+function WhoAreYouScreen({ session, onSelect }) {
+  const { players, groups } = session;
+  const grps = groups || [{ id: "g1", name: "Grupo 1" }];
+
+  return (
+    <div className="who-screen">
+      <div className="who-header">
+        <div className="who-icon">⛳</div>
+        <h2>¿Quién eres?</h2>
+        <p>Selecciona tu nombre para continuar</p>
+      </div>
+      <div className="who-groups">
+        {grps.map(g => {
+          const gPlayers = players.filter(p => p.groupId === g.id);
+          if (!gPlayers.length) return null;
+          return (
+            <div key={g.id} className="who-group-block">
+              <div className="who-group-name">{g.name}</div>
+              <div className="who-player-list">
+                {gPlayers.map(p => (
+                  <button key={p.id} className="who-player-btn" onClick={() => onSelect(p.id, g.id)}>
+                    <span className="who-player-name">{p.name}</span>
+                    <span className="who-player-hcp">HCP {p.handicap}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Hole View (all players, one hole at a time) ──────────────────────────────
-function HoleView({ session, onUpdate }) {
+function HoleView({ session, onUpdate, defaultGroupId }) {
   const { players, holes } = session;
   const groups = session.groups || [{ id: "g1", name: "Grupo 1" }];
   const [holeIdx, setHoleIdx] = useState(0);
-  const [activeGroupId, setActiveGroupId] = useState(groups[0].id);
+  const [activeGroupId, setActiveGroupId] = useState(defaultGroupId || groups[0].id);
   const hole = holes[holeIdx];
 
   const groupPlayers = players.filter(p => p.groupId === activeGroupId);
@@ -952,6 +988,21 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
+  const storageKey = "golf-my-identity-" + (session.roundName || "");
+  const savedIdentity = (() => { try { const v = localStorage.getItem(storageKey); return v ? JSON.parse(v) : null; } catch(e) { return null; } })();
+  const [myIdentity, setMyIdentity] = useState(savedIdentity);
+
+  const handleIdentitySelect = (playerId, groupId) => {
+    const identity = { playerId, groupId };
+    setMyIdentity(identity);
+    try { localStorage.setItem(storageKey, JSON.stringify(identity)); } catch(e) {}
+  };
+
+  const clearIdentity = () => {
+    setMyIdentity(null);
+    try { localStorage.removeItem(storageKey); } catch(e) {}
+  };
+
   const player = players.find(p=>p.id===activePlayer);
   const scores = session.scores?.[activePlayer]||{};
   const hdcPct = session.hdcPct ?? 100;
@@ -1028,6 +1079,7 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
   return (
     <div className="scorecard-screen">
       {showHistory && <HistoryModal history={history||[]} onClose={()=>setShowHistory(false)} onRestore={(sess)=>{onRestoreRound(sess);}} onDeleteRound={onDeleteRound}/>}
+      {!myIdentity && <WhoAreYouScreen session={session} onSelect={handleIdentitySelect}/>}
       {confirmNew && <ConfirmDialog message="¿Comenzar una nueva ronda? La ronda actual se guardará en el historial." onConfirm={()=>{setConfirmNew(false);onFinish(session,true);}} onCancel={()=>setConfirmNew(false)}/>}
       {confirmFinish && <ConfirmDialog message="¿Marcar esta ronda como finalizada y guardarla en el historial?" onConfirm={()=>{setConfirmFinish(false);onFinish(session,false);}} onCancel={()=>setConfirmFinish(false)}/>}
 
@@ -1045,13 +1097,14 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
         </div>
         <div style={{display:"flex",gap:6}}>
           <button className="btn-ghost small" onClick={()=>setShowHistory(true)}>🕓</button>
+          {myIdentity && <button className="btn-ghost small" onClick={clearIdentity} title="Cambiar jugador">👤</button>}
           <button className="btn-ghost small" onClick={()=>setConfirmFinish(true)}>✓ Finalizar</button>
           <button className="btn-ghost small" onClick={()=>setConfirmNew(true)}>Nueva</button>
         </div>
       </header>
 
       {activeTab==="hoyo"&&(
-        <HoleView session={session} onUpdate={onUpdate} />
+        <HoleView session={session} onUpdate={onUpdate} defaultGroupId={myIdentity?.groupId} />
       )}
 
       {activeTab==="match"&&(
@@ -1931,6 +1984,21 @@ export default function GolfApp() {
         .vegas-gt-amount{font-size:2rem;font-weight:700}
         .vegas-gt-sub{font-size:0.78rem;opacity:0.8;margin-top:4px}
 
+
+        /* Who Are You */
+        .who-screen{position:fixed;inset:0;background:var(--green-dark);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:40px 20px;overflow-y:auto}
+        .who-header{text-align:center;margin-bottom:32px;color:white}
+        .who-icon{font-size:3rem;margin-bottom:12px}
+        .who-header h2{font-size:1.6rem;font-weight:700;margin-bottom:6px}
+        .who-header p{font-size:0.9rem;opacity:0.75}
+        .who-groups{width:100%;max-width:400px;display:flex;flex-direction:column;gap:16px}
+        .who-group-block{background:rgba(255,255,255,0.08);border-radius:12px;padding:14px}
+        .who-group-name{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);margin-bottom:10px}
+        .who-player-list{display:flex;flex-direction:column;gap:8px}
+        .who-player-btn{background:white;border:none;border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit;transition:background 0.15s}
+        .who-player-btn:hover{background:var(--green-pale)}
+        .who-player-name{font-weight:700;font-size:1rem;color:var(--green-dark)}
+        .who-player-hcp{font-size:0.8rem;color:var(--muted);background:var(--green-pale);padding:2px 8px;border-radius:10px}
         /* Sindicato */
         .sind-view{padding-bottom:40px}
         .sind-info{padding:10px 16px;font-size:0.8rem;color:var(--muted);background:var(--green-pale);border-bottom:1px solid #c5dfc9}
