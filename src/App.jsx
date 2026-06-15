@@ -716,44 +716,50 @@ function MatchView({ session, onUpdate }) {
   const calcSegResult = (segHoles, cfg) => {
     if (!cfg || !cfg.pairA.length || !cfg.pairB.length) return null;
     const { pairA, pairB, modalidad } = cfg;
-    let scoreA = 0, scoreB = 0, halved = 0;
+    let scoreA = 0, scoreB = 0;
 
     segHoles.forEach(hole => {
-      const scoresA = pairA.map(pid => {
+      const getNet = (pid) => {
         const s = (session.scores?.[pid] || {})[hole.number];
         if (!s) return null;
         const ehcp = effectiveHcp(players.find(p => p.id === pid)?.handicap || 0, hdcPct);
         return modalidad === "matchplay"
           ? s - Math.floor(ehcp / 18) - (hole.si <= (ehcp % 18) ? 1 : 0)
           : calcStableford(s, hole.par, hole.si, ehcp);
-      }).filter(x => x !== null);
+      };
 
-      const scoresB = pairB.map(pid => {
-        const s = (session.scores?.[pid] || {})[hole.number];
-        if (!s) return null;
-        const ehcp = effectiveHcp(players.find(p => p.id === pid)?.handicap || 0, hdcPct);
-        return modalidad === "matchplay"
-          ? s - Math.floor(ehcp / 18) - (hole.si <= (ehcp % 18) ? 1 : 0)
-          : calcStableford(s, hole.par, hole.si, ehcp);
-      }).filter(x => x !== null);
+      const netsA = pairA.map(getNet).filter(x => x !== null);
+      const netsB = pairB.map(getNet).filter(x => x !== null);
 
-      if (!scoresA.length || !scoresB.length) return;
+      if (netsA.length < 2 || netsB.length < 2) return;
 
-      const bestA = modalidad === "matchplay" ? Math.min(...scoresA) : Math.max(...scoresA);
-      const bestB = modalidad === "matchplay" ? Math.min(...scoresB) : Math.max(...scoresB);
+      // Sort: matchplay lower is better, mejorball higher is better
+      const sortA = modalidad === "matchplay" ? [...netsA].sort((a,b)=>a-b) : [...netsA].sort((a,b)=>b-a);
+      const sortB = modalidad === "matchplay" ? [...netsB].sort((a,b)=>a-b) : [...netsB].sort((a,b)=>b-a);
 
+      // Best vs Best (index 0)
+      const b1A = sortA[0], b1B = sortB[0];
       if (modalidad === "matchplay") {
-        if (bestA < bestB) scoreA++;
-        else if (bestB < bestA) scoreB++;
-        else halved++;
+        if (b1A < b1B) scoreA++;
+        else if (b1B < b1A) scoreB++;
+        // empate no suma
       } else {
-        if (bestA > bestB) scoreA++;
-        else if (bestB > bestA) scoreB++;
-        else halved++;
+        if (b1A > b1B) scoreA++;
+        else if (b1B > b1A) scoreB++;
+      }
+
+      // Worst vs Worst (index 1)
+      const b2A = sortA[1], b2B = sortB[1];
+      if (modalidad === "matchplay") {
+        if (b2A < b2B) scoreA++;
+        else if (b2B < b2A) scoreB++;
+      } else {
+        if (b2A > b2B) scoreA++;
+        else if (b2B > b2A) scoreB++;
       }
     });
 
-    return { scoreA, scoreB, halved };
+    return { scoreA, scoreB, halved: 0 };
   };
 
   const pairName = (pids) => pids.map(pid => {
@@ -810,13 +816,13 @@ function MatchView({ session, onUpdate }) {
                       <div className="match-score-lbl">Pareja A</div>
                     </div>
                     <div className="match-halved-box">
-                      {result.halved > 0 && <span>{result.halved} emp.</span>}
                       {result.scoreA === result.scoreB && <span className="match-tie">Empate</span>}
                       {result.scoreA !== result.scoreB && (
                         <span className="match-winner-lbl">
                           Gana {result.scoreA > result.scoreB ? "A" : "B"}
                         </span>
                       )}
+                      <div style={{fontSize:"0.65rem",color:"var(--muted)",marginTop:4}}>max {segHoles.length*2} pts</div>
                     </div>
                     <div className={`match-score-box ${result.scoreB > result.scoreA ? "winner" : ""}`}>
                       <div className="match-score-num">{result.scoreB}</div>
@@ -842,10 +848,17 @@ function MatchView({ session, onUpdate }) {
                         const ehcp = effectiveHcp(players.find(p=>p.id===pid)?.handicap||0, hdcPct);
                         return cfg.modalidad==="matchplay" ? s - Math.floor(ehcp/18)-(hole.si<=(ehcp%18)?1:0) : calcStableford(s,hole.par,hole.si,ehcp);
                       }).filter(x=>x!==null);
-                      if (netA.length && netB.length) {
-                        const bA = cfg.modalidad==="matchplay"?Math.min(...netA):Math.max(...netA);
-                        const bB = cfg.modalidad==="matchplay"?Math.min(...netB):Math.max(...netB);
-                        winner = cfg.modalidad==="matchplay" ? (bA<bB?"A":bA>bB?"B":"E") : (bA>bB?"A":bA<bB?"B":"E");
+                      if (netA.length >= 2 && netB.length >= 2) {
+                        const sA = cfg.modalidad==="matchplay"?[...netA].sort((a,b)=>a-b):[...netA].sort((a,b)=>b-a);
+                        const sB = cfg.modalidad==="matchplay"?[...netB].sort((a,b)=>a-b):[...netB].sort((a,b)=>b-a);
+                        let ptA=0,ptB=0;
+                        // best vs best
+                        if(cfg.modalidad==="matchplay"){if(sA[0]<sB[0])ptA++;else if(sB[0]<sA[0])ptB++;}
+                        else{if(sA[0]>sB[0])ptA++;else if(sB[0]>sA[0])ptB++;}
+                        // worst vs worst
+                        if(cfg.modalidad==="matchplay"){if(sA[1]<sB[1])ptA++;else if(sB[1]<sA[1])ptB++;}
+                        else{if(sA[1]>sB[1])ptA++;else if(sB[1]>sA[1])ptB++;}
+                        winner = ptA>0&&ptB===0?"A":ptB>0&&ptA===0?"B":ptA>0&&ptB>0?"E":"";
                       }
                     }
                     return (
@@ -1021,7 +1034,8 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
           <button className={`tab ${activeTab==="leaderboard"?"active":""}`} onClick={()=>setActiveTab("leaderboard")}>Stableford</button>
           <button className={`tab ${activeTab==="medal-neto"?"active":""}`} onClick={()=>setActiveTab("medal-neto")}>Medal Neto</button>
           <button className={`tab ${activeTab==="medal-gross"?"active":""}`} onClick={()=>setActiveTab("medal-gross")}>Medal Gross</button>
-          <button className={`tab ${activeTab==="match"?"active":""}`} onClick={()=>setActiveTab("match")}>Match</button>
+          <button className={`tab ${activeTab==="match"?"active":""}`} onClick={()=>setActiveTab("match")}>Parejas</button>
+          <button className={`tab ${activeTab==="vegas"?"active":""}`} onClick={()=>setActiveTab("vegas")}>Vegas</button>
         </div>
         <div style={{display:"flex",gap:6}}>
           <button className="btn-ghost small" onClick={()=>setShowHistory(true)}>🕓</button>
@@ -1036,6 +1050,10 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
 
       {activeTab==="match"&&(
         <MatchView session={session} onUpdate={onUpdate} />
+      )}
+
+      {activeTab==="vegas"&&(
+        <VegasView session={session} onUpdate={onUpdate} />
       )}
 
       {activeTab==="scorecard"&&(
@@ -1118,6 +1136,236 @@ function ScorecardScreen({ session, onUpdate, onFinish, history, onRestoreRound,
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── Vegas View ───────────────────────────────────────────────────────────────
+function VegasView({ session, onUpdate }) {
+  const { players, holes } = session;
+  const vegas = session.vegas || { valorPunto: 1, segments: [] };
+  const segSize = 6;
+  const numSegs = Math.ceil(holes.length / segSize);
+  const segments = Array.from({ length: numSegs }, (_, i) => holes.slice(i * segSize, (i + 1) * segSize));
+
+  const [editingSeg, setEditingSeg] = useState(null);
+  const [draftA, setDraftA] = useState([]);
+  const [draftB, setDraftB] = useState([]);
+  const [editingValor, setEditingValor] = useState(false);
+  const [draftValor, setDraftValor] = useState(vegas.valorPunto);
+
+  const getSegCfg = (i) => vegas.segments[i] || null;
+
+  const saveSegCfg = (i, pairA, pairB) => {
+    const segs = [...(vegas.segments || [])];
+    segs[i] = { pairA, pairB };
+    onUpdate({ ...session, vegas: { ...vegas, segments: segs } });
+    setEditingSeg(null);
+  };
+
+  const saveValor = () => {
+    onUpdate({ ...session, vegas: { ...vegas, valorPunto: Number(draftValor) } });
+    setEditingValor(false);
+  };
+
+  const togglePlayer = (pid, side) => {
+    if (side === "A") {
+      if (draftA.includes(pid)) setDraftA(draftA.filter(x => x !== pid));
+      else if (draftA.length < 2) setDraftA([...draftA, pid]);
+    } else {
+      if (draftB.includes(pid)) setDraftB(draftB.filter(x => x !== pid));
+      else if (draftB.length < 2) setDraftB([...draftB, pid]);
+    }
+  };
+
+  const vegasNum = (scores) => {
+    const sorted = [...scores].sort((a, b) => a - b);
+    return sorted.length === 2 ? parseInt(String(sorted[0]) + String(sorted[1])) : null;
+  };
+
+  const calcSeg = (segHoles, cfg) => {
+    if (!cfg || !cfg.pairA.length || !cfg.pairB.length) return null;
+    let totalDiff = 0;
+    let holesPlayed = 0;
+    const holeDetail = segHoles.map(hole => {
+      const scA = cfg.pairA.map(pid => (session.scores?.[pid] || {})[hole.number]).filter(Boolean);
+      const scB = cfg.pairB.map(pid => (session.scores?.[pid] || {})[hole.number]).filter(Boolean);
+      if (scA.length < 2 || scB.length < 2) return { hole, numA: null, numB: null, diff: null };
+      const numA = vegasNum(scA);
+      const numB = vegasNum(scB);
+      const diff = numA < numB ? numB - numA : numA > numB ? -(numA - numB) : 0;
+      totalDiff += diff;
+      holesPlayed++;
+      return { hole, numA, numB, diff };
+    });
+    return { totalDiff, holesPlayed, holeDetail };
+  };
+
+  const pairName = (pids) => pids.map(pid => {
+    const p = players.find(x => x.id === pid);
+    return p ? p.name.split(" ")[0] : "?";
+  }).join(" & ");
+
+  // Grand total across segments
+  const grandTotal = vegas.segments.reduce((acc, cfg, i) => {
+    if (!cfg) return acc;
+    const result = calcSeg(segments[i], cfg);
+    return result ? acc + result.totalDiff : acc;
+  }, 0);
+
+  return (
+    <div className="match-view">
+      <div className="vegas-header-card">
+        <div className="vegas-header-left">
+          <div className="vegas-title">🎰 Vegas</div>
+          <div className="vegas-subtitle">Segmentos de {segSize} hoyos · Parejas rotativas</div>
+        </div>
+        <div className="vegas-valor-wrap">
+          {!editingValor ? (
+            <div className="vegas-valor-display" onClick={() => { setDraftValor(vegas.valorPunto); setEditingValor(true); }}>
+              <div className="vegas-valor-num">S/ {vegas.valorPunto}</div>
+              <div className="vegas-valor-lbl">por punto</div>
+            </div>
+          ) : (
+            <div className="vegas-valor-edit">
+              <input type="number" className="number-input" min={1} value={draftValor} onChange={e => setDraftValor(e.target.value)} style={{width:60}} autoFocus/>
+              <button className="btn-mini green" onClick={saveValor}>OK</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {segments.map((segHoles, i) => {
+        const cfg = getSegCfg(i);
+        const result = cfg ? calcSeg(segHoles, cfg) : null;
+        const holeRange = `Hoyos ${segHoles[0].number}–${segHoles[segHoles.length-1].number}`;
+        const winnerA = result && result.totalDiff > 0;
+        const winnerB = result && result.totalDiff < 0;
+        const soles = result ? Math.abs(result.totalDiff) * vegas.valorPunto : 0;
+
+        return (
+          <div key={i} className="match-segment">
+            <div className="match-seg-header">
+              <div className="match-seg-title">
+                <span className="match-seg-num">Segmento {i+1}</span>
+                <span className="match-seg-range">{holeRange}</span>
+              </div>
+              <button className="btn-mini" onClick={() => { const c=getSegCfg(i); setDraftA(c?.pairA||[]); setDraftB(c?.pairB||[]); setEditingSeg(i); }}>
+                {cfg ? "Editar" : "Configurar"}
+              </button>
+            </div>
+
+            {!cfg && <div className="match-no-config">Toca "Configurar" para elegir parejas</div>}
+
+            {cfg && (
+              <>
+                <div className="match-pairs-row">
+                  <div className={`match-pair-card pair-a ${winnerA?"vegas-winner":""}`}>
+                    <div className="match-pair-label">Pareja A</div>
+                    <div className="match-pair-names">{pairName(cfg.pairA)}</div>
+                  </div>
+                  <div className="match-vs">VS</div>
+                  <div className={`match-pair-card pair-b ${winnerB?"vegas-winner":""}`}>
+                    <div className="match-pair-label">Pareja B</div>
+                    <div className="match-pair-names">{pairName(cfg.pairB)}</div>
+                  </div>
+                </div>
+
+                {result && result.holesPlayed > 0 && (
+                  <div className="vegas-result">
+                    <div className="vegas-result-row">
+                      <span className="vegas-result-label">Diferencia acumulada:</span>
+                      <span className="vegas-result-val">{result.totalDiff > 0 ? "+" : ""}{result.totalDiff}</span>
+                    </div>
+                    <div className="vegas-result-row">
+                      <span className="vegas-result-label">Pago ({result.holesPlayed}/{segSize} hoyos):</span>
+                      <span className={`vegas-soles ${soles > 0 ? "positive" : ""}`}>S/ {soles}</span>
+                    </div>
+                    {soles > 0 && (
+                      <div className="vegas-paga">
+                        Paga {winnerA ? pairName(cfg.pairB) : pairName(cfg.pairA)} → {winnerA ? pairName(cfg.pairA) : pairName(cfg.pairB)}
+                      </div>
+                    )}
+                    {result.totalDiff === 0 && result.holesPlayed === segSize && (
+                      <div className="vegas-paga">Empate — nadie paga</div>
+                    )}
+                  </div>
+                )}
+
+                <div className="match-hole-detail">
+                  <div className="vegas-hole-header">
+                    <span>{pairName(cfg.pairA)}</span>
+                    <span>Hoyo</span>
+                    <span>{pairName(cfg.pairB)}</span>
+                  </div>
+                  {result && result.holeDetail.map(({ hole, numA, numB, diff }) => (
+                    <div key={hole.number} className={`match-hole-row ${diff===null?"":diff>0?"won-a":diff<0?"won-b":"halved"}`}>
+                      <span className="match-hole-scores">{numA ?? "—"}</span>
+                      <span className="match-hole-num">H{hole.number} P{hole.par}</span>
+                      <span className="match-hole-scores">{numB ?? "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {grandTotal !== 0 && (
+        <div className="vegas-grand-total">
+          <div className="vegas-gt-label">Total del día</div>
+          <div className="vegas-gt-amount">S/ {Math.abs(grandTotal) * vegas.valorPunto}</div>
+          <div className="vegas-gt-sub">
+            {grandTotal > 0 ? "Pareja A gana" : "Pareja B gana"} · diferencia {Math.abs(grandTotal)} pts
+          </div>
+        </div>
+      )}
+
+      {editingSeg !== null && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditingSeg(null)}>
+          <div className="modal-box">
+            <div className="modal-header">
+              <h2>Segmento {editingSeg+1} · {segments[editingSeg][0].number}–{segments[editingSeg][segments[editingSeg].length-1].number}</h2>
+              <button className="btn-icon" onClick={() => setEditingSeg(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="field-label" style={{marginBottom:8}}>Elige parejas</div>
+              <div className="match-pair-editor">
+                <div className="match-pair-col">
+                  <div className="match-pair-col-label pair-a-label">Pareja A</div>
+                  {draftA.map(pid => { const p=players.find(x=>x.id===pid); return <div key={pid} className="match-player-chip chip-a" onClick={()=>togglePlayer(pid,"A")}>{p?.name.split(" ")[0]} ✕</div>; })}
+                  {draftA.length < 2 && <div className="match-player-chip chip-empty">+ jugador</div>}
+                </div>
+                <div className="match-pair-col">
+                  <div className="match-pair-col-label pair-b-label">Pareja B</div>
+                  {draftB.map(pid => { const p=players.find(x=>x.id===pid); return <div key={pid} className="match-player-chip chip-b" onClick={()=>togglePlayer(pid,"B")}>{p?.name.split(" ")[0]} ✕</div>; })}
+                  {draftB.length < 2 && <div className="match-player-chip chip-empty">+ jugador</div>}
+                </div>
+              </div>
+              <div className="match-player-list">
+                {players.map(p => {
+                  const inA = draftA.includes(p.id), inB = draftB.includes(p.id);
+                  return (
+                    <div key={p.id} className={`match-player-option ${inA?"in-a":inB?"in-b":""}`}>
+                      <span>{p.name}</span>
+                      <div style={{display:"flex",gap:6}}>
+                        <button className={"btn-mini"+(inA?" active-sort":"")} onClick={()=>togglePlayer(p.id,"A")} disabled={!inA&&draftA.length>=2}>{inA?"✓ A":"+ A"}</button>
+                        <button className={"btn-mini"+(inB?" active-sort":"")} onClick={()=>togglePlayer(p.id,"B")} disabled={!inB&&draftB.length>=2}>{inB?"✓ B":"+ B"}</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="edit-footer">
+                <button className="btn-ghost" onClick={() => setEditingSeg(null)}>Cancelar</button>
+                <button className="btn-primary inline" disabled={draftA.length===0||draftB.length===0} onClick={() => saveSegCfg(editingSeg, draftA, draftB)}>Guardar parejas</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1505,6 +1753,29 @@ export default function GolfApp() {
         .hv-next-btn:hover{opacity:0.9}
         .hv-finish-hint{text-align:center;padding:16px;font-size:0.85rem;color:var(--muted)}
 
+
+        /* Vegas */
+        .vegas-header-card{background:var(--green-dark);color:white;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+        .vegas-title{font-size:1.1rem;font-weight:700}
+        .vegas-subtitle{font-size:0.75rem;opacity:0.75;margin-top:2px}
+        .vegas-valor-display{text-align:center;cursor:pointer;background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 12px}
+        .vegas-valor-display:hover{background:rgba(255,255,255,0.25)}
+        .vegas-valor-num{font-size:1.2rem;font-weight:700}
+        .vegas-valor-lbl{font-size:0.65rem;opacity:0.8}
+        .vegas-valor-edit{display:flex;align-items:center;gap:6px}
+        .vegas-winner{border:2px solid #f5c518 !important;background:#fffbea !important}
+        .vegas-result{background:#f8fcf9;padding:12px 14px;border-top:1px solid #dde}
+        .vegas-result-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+        .vegas-result-label{font-size:0.8rem;color:var(--muted)}
+        .vegas-result-val{font-size:1rem;font-weight:700;color:var(--green-dark)}
+        .vegas-soles{font-size:1.2rem;font-weight:700;color:var(--green-dark)}
+        .vegas-soles.positive{color:#e63946}
+        .vegas-paga{font-size:0.82rem;color:var(--green-mid);font-weight:600;margin-top:4px;text-align:center;padding:6px;background:var(--green-pale);border-radius:6px}
+        .vegas-hole-header{display:flex;justify-content:space-between;padding:6px 14px;background:var(--green-pale);font-size:0.72rem;font-weight:700;color:var(--green-dark)}
+        .vegas-grand-total{background:var(--green-dark);color:white;border-radius:12px;padding:16px;text-align:center}
+        .vegas-gt-label{font-size:0.78rem;opacity:0.75;margin-bottom:4px}
+        .vegas-gt-amount{font-size:2rem;font-weight:700}
+        .vegas-gt-sub{font-size:0.78rem;opacity:0.8;margin-top:4px}
         /* ── Responsive Mobile ───────────────────────────────────────────── */
         @media (max-width: 600px) {
           .setup-screen{padding:16px 12px 60px;font-size:16px}
