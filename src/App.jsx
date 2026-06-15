@@ -31,6 +31,7 @@ const STORAGE_KEY = "golf-scorecard-session";
 const COURSES_KEY = "golf-courses-library";
 const HISTORY_KEY = "golf-rounds-history";
 const PLAYERS_KEY = "golf-players-library";
+const DEFAULT_COURSE_KEY = "golf-default-course";
 const PAR_OPTIONS = [3, 4, 5];
 const SI_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 1);
 const DEFAULT_HOLES = Array.from({ length: 18 }, (_, i) => ({
@@ -302,7 +303,7 @@ const PRESET_COURSES = [
 ];
 
 // ─── Course Manager ───────────────────────────────────────────────────────────
-function CourseManager({ courses, onSave, onLoad, onDelete, onClose, currentHoles, currentName }) {
+function CourseManager({ courses, onSave, onLoad, onDelete, onClose, currentHoles, currentName, defaultCourseId, onSetDefault }) {
   const [view, setView] = useState("list");
   const [editing, setEditing] = useState(null);
   const [courseName, setCourseName] = useState("");
@@ -338,11 +339,12 @@ function CourseManager({ courses, onSave, onLoad, onDelete, onClose, currentHole
               {courses.map(c => (
                 <div key={c.id} className="course-card">
                   <div className="course-card-info">
-                    <div className="course-card-name">{c.name}</div>
+                    <div className="course-card-name">{c.name}{c.id===defaultCourseId&&<span className="default-badge">⭐ Pred.</span>}</div>
                     <div className="course-card-sub">{c.city&&<span>{c.city} · </span>}Par {c.holes.reduce((a,h)=>a+h.par,0)} · {c.updatedAt}</div>
                   </div>
                   <div className="course-card-actions">
                     <button className="btn-mini green" onClick={()=>{onLoad(c);onClose();}}>Cargar</button>
+                    <button className={"btn-mini"+(c.id===defaultCourseId?" active-sort":"")} onClick={()=>onSetDefault(c.id)} title="Campo predeterminado">{c.id===defaultCourseId?"⭐ Pred.":"☆ Pred."}</button>
                     <button className="btn-mini" onClick={()=>openEdit(c)}>Editar</button>
                     {confirmDelete===c.id
                       ? <><button className="btn-mini red" onClick={()=>{onDelete(c.id);setConfirmDelete(null);}}>¿Eliminar?</button><button className="btn-mini" onClick={()=>setConfirmDelete(null)}>No</button></>
@@ -384,10 +386,13 @@ function CourseManager({ courses, onSave, onLoad, onDelete, onClose, currentHole
 }
 
 // ─── Setup Screen ─────────────────────────────────────────────────────────────
-function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, onRestoreRound, onDeleteRound, savedPlayers, onSavePlayer, onDeletePlayer }) {
+function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, onRestoreRound, onDeleteRound, savedPlayers, onSavePlayer, onDeletePlayer, defaultCourseId, onSetDefault }) {
   const today = new Date().toLocaleDateString("es-ES");
-  const [roundName, setRoundName] = useState("Ronda del " + today);
   const [holeCount, setHoleCount] = useState(18);
+  const defaultCourse = defaultCourseId ? courses.find(c => c.id === defaultCourseId) : null;
+  const [loadedCourse, setLoadedCourse] = useState(defaultCourse || null);
+  const [holes, setHoles] = useState(defaultCourse ? defaultCourse.holes : DEFAULT_HOLES);
+  const [roundName, setRoundName] = useState(defaultCourse ? defaultCourse.name + " " + today : "Ronda del " + today);
   const [groups, setGroups] = useState([{ id:"g1", name:"Grupo 1" }]);
   const [players, setPlayers] = useState([
     { id:1,name:"",handicap:18,groupId:"g1"},{id:2,name:"",handicap:18,groupId:"g1"},{id:3,name:"",handicap:18,groupId:"g1"},{id:4,name:"",handicap:18,groupId:"g1"},
@@ -425,7 +430,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   return (
     <div className="setup-screen">
       {showPlayers && <PlayerManager savedPlayers={savedPlayers} onSave={onSavePlayer} onDelete={onDeletePlayer} onClose={()=>{setShowPlayers(false);setPickingGroupId(null);setPickingPlayerId(null);}} onPick={(pl)=>{ if(pickingPlayerId) { setPlayers(ps=>ps.map(p=>p.id===pickingPlayerId?{...p,name:pl.firstName+" "+pl.lastName,handicap:pl.handicap}:p)); } else if(pickingGroupId){ if(players.length>=12)return; setPlayers(ps=>[...ps,{id:Date.now(),name:pl.firstName+" "+pl.lastName,handicap:pl.handicap,groupId:pickingGroupId}]); } setPickingPlayerId(null); }}/>}
-      {showCourses && <CourseManager courses={courses} onSave={onSaveCourse} onLoad={loadCourse} onDelete={onDeleteCourse} onClose={()=>setShowCourses(false)} currentHoles={holes} currentName={loadedCourse?.name||""} />}
+      {showCourses && <CourseManager courses={courses} onSave={onSaveCourse} onLoad={loadCourse} onDelete={onDeleteCourse} onClose={()=>setShowCourses(false)} currentHoles={holes} currentName={loadedCourse?.name||""} defaultCourseId={defaultCourseId} onSetDefault={onSetDefault}/>}
       {showHistory && <HistoryModal history={history} onClose={()=>setShowHistory(false)} onRestore={onRestoreRound} onDeleteRound={onDeleteRound} />}
 
       <div className="setup-header">
@@ -531,7 +536,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
         <div className="section-header">
           <label className="field-label">
             Campo
-            {loadedCourse&&<span className="loaded-badge">📍 {loadedCourse.name}</span>}
+            {loadedCourse&&<span className="loaded-badge">📍 {loadedCourse.name}{loadedCourse.id===defaultCourseId&&" ⭐"}</span>}
             {!loadedCourse&&<span className="par-badge">Par {holes.reduce((a,h)=>a+h.par,0)}</span>}
           </label>
           <button className="btn-ghost" onClick={()=>setShowCourses(true)}>🏌️ Mis campos ({courses.length})</button>
@@ -1377,6 +1382,7 @@ export default function GolfApp() {
   const [session, setSession] = useState(null);
   const [courses, setCourses] = useState([]);
   const [savedPlayers, setSavedPlayers] = useState([]);
+  const [defaultCourseId, setDefaultCourseId] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastSaved, setLastSaved] = useState(null);
@@ -1394,6 +1400,8 @@ export default function GolfApp() {
         if (cRes?.value) setCourses(JSON.parse(cRes.value));
         if (hRes?.value) setHistory(JSON.parse(hRes.value));
         if (pRes?.value) setSavedPlayers(JSON.parse(pRes.value));
+        const dcRes = await fbGet(DEFAULT_COURSE_KEY).catch(()=>null);
+        if (dcRes?.value) setDefaultCourseId(dcRes.value);
       } catch(e){}
       setLoading(false);
     }
@@ -1454,6 +1462,10 @@ export default function GolfApp() {
   const deleteRound = async (id) => {
     const updated = history.filter(r=>r.id!==id);
     await saveHistory(null, updated);
+  };
+  const setDefaultCourse = async (id) => {
+    setDefaultCourseId(id);
+    try { await fbSet(DEFAULT_COURSE_KEY, id); } catch(e) {}
   };
   const savePlayer = async (player) => {
     const updated = savedPlayers.some(p=>p.id===player.id) ? savedPlayers.map(p=>p.id===player.id?player:p) : [...savedPlayers,player];
@@ -1524,6 +1536,7 @@ export default function GolfApp() {
         .course-card-sub{font-size:0.75rem;color:var(--muted);margin-top:2px}
         .course-card-actions{display:flex;gap:6px;flex-wrap:wrap}
         .preset-card{background:#f8fcf9;border-color:#a8d5b5}
+        .default-badge{margin-left:6px;font-size:0.7rem;background:#fff8dc;color:#b8860b;border-radius:8px;padding:1px 6px;font-weight:600}
         .btn-mini{padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer;font-family:inherit;border:1.5px solid #c5dfc9;background:white;color:var(--text)}
         .btn-mini:hover{background:var(--green-pale)}
         .btn-mini.green{background:var(--green-dark);color:white;border-color:var(--green-dark)}
@@ -1583,7 +1596,7 @@ export default function GolfApp() {
         .top-bar{background:var(--green-dark);color:white;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
         .round-name{font-size:0.9rem;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .course-badge{font-size:0.8rem;font-weight:400;opacity:0.8}
-        .tab-bar{display:flex;gap:4px}
+        .tab-bar{display:flex;gap:4px;flex-wrap:wrap}
         .tab{background:none;border:1.5px solid rgba(255,255,255,0.4);color:rgba(255,255,255,0.8);border-radius:6px;padding:5px 12px;font-size:0.8rem;cursor:pointer;font-family:inherit}
         .tab.active{background:white;color:var(--green-dark);font-weight:600;border-color:white}
         .player-tabs{display:flex;gap:0;overflow-x:auto;background:var(--green-mid);border-bottom:2px solid var(--green-dark)}
@@ -1787,7 +1800,7 @@ export default function GolfApp() {
           .btn-ghost{font-size:0.9rem;padding:8px 14px}
           .top-bar{padding:8px 10px;gap:6px}
           .round-name{font-size:0.78rem}
-          .tab-bar{overflow-x:auto;flex-wrap:nowrap;gap:3px}
+          .tab-bar{gap:3px;flex-wrap:wrap}
           .tab{padding:4px 8px;font-size:0.7rem;white-space:nowrap}
           .btn-ghost.small{padding:4px 7px;font-size:0.72rem}
           .player-tabs{scroll-snap-type:x mandatory}
@@ -1833,7 +1846,7 @@ export default function GolfApp() {
       `}</style>
 
       {!session
-        ? <SetupScreen onStart={startSession} courses={courses} onSaveCourse={saveCourse} onDeleteCourse={deleteCourse} history={history} onRestoreRound={restoreRound} onDeleteRound={deleteRound} savedPlayers={savedPlayers} onSavePlayer={savePlayer} onDeletePlayer={deletePlayer}/>
+        ? <SetupScreen onStart={startSession} courses={courses} onSaveCourse={saveCourse} onDeleteCourse={deleteCourse} history={history} onRestoreRound={restoreRound} onDeleteRound={deleteRound} savedPlayers={savedPlayers} onSavePlayer={savePlayer} onDeletePlayer={deletePlayer} defaultCourseId={defaultCourseId} onSetDefault={setDefaultCourse}/>
         : <ScorecardScreen session={session} onUpdate={updateSession} onFinish={finishSession} history={history} onRestoreRound={restoreRound} onDeleteRound={deleteRound}/>
       }
 
