@@ -402,7 +402,7 @@ function SetupScreen({ onStart, courses, onSaveCourse, onDeleteCourse, history, 
   const [showPlayers, setShowPlayers] = useState(false);
   const [pickingGroupId, setPickingGroupId] = useState(null);
   const [pickingPlayerId, setPickingPlayerId] = useState(null);
-  const [loadedCourse, setLoadedCourse] = useState(null);
+
   const [hdcPct, setHdcPct] = useState(100);
   const [showCustomHdc, setShowCustomHdc] = useState(false);
   const [customHdcVal, setCustomHdcVal] = useState("");
